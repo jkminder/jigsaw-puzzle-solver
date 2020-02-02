@@ -1,7 +1,6 @@
 import numpy as np
 import cv2
 from matplotlib import pyplot as plt
-import imutils
 import math
 import scipy.ndimage.filters as filters
 import scipy.ndimage as ndimage
@@ -88,7 +87,6 @@ def get_corners(mask, harris_blocksize):
     maxima[diff == 0] = 0
 
     labeled, num_objects = ndimage.label(maxima)
-    print(num_objects)
     # slices = ndimage.find_objects(labeled)
     # yx = np.array(ndimage.center_of_mass(dst, labeled, range(1, num_objects+1)))
     yx = np.array(ndimage.center_of_mass(data, labeled, range(1, num_objects + 1)))
@@ -97,5 +95,76 @@ def get_corners(mask, harris_blocksize):
     yx[:, 1] = temp
     return np.round(yx).astype(np.int)
 
-def improve_corners(edges, mask,  corners):
-    pass
+def get_vector(p1,p2):
+    if type(p1).__module__ != np.__name__:
+        p1 = np.array(p1)
+    if type(p2).__module__ != np.__name__:
+        p2 = np.array(p2)
+    return p2-p1
+
+
+def get_angle(p1,p2,p3):
+    """calculate angle between p2_p3 and p2_p3"""
+    p2p1 = get_vector(p2,p1)
+    p2p3 = get_vector(p2,p3)
+    cosine_angle = np.dot(p2p1, p2p3) / (np.linalg.norm(p2p1) * np.linalg.norm(p2p3))
+    angle = np.arccos(cosine_angle)
+    return np.degrees(angle)
+
+
+def get_90deg_corners(pt, corners, rule1, rule2, margin = 5):
+    """calculate all corners that are 90 degrees from pt, where the corners c1, c2 must comply with rule1, rule2 """
+    res = []
+    used = []
+    for c1 in corners:
+        if not rule1(c1):
+            continue
+        for c2 in corners:
+            if np.array_equal(c1,c2) or np.array_equal(c2,pt) or np.array_equal(c1,pt) or \
+                    not rule2(c2) or \
+                    tuple(c2) in used:
+                continue
+            if 90 - margin < get_angle(c1,pt,c2) < 90 + margin:
+                res.append((c1,c2))
+                used.append(tuple(c1))
+    return res
+
+
+def get_tile_corners(corners, tile_center, angle_margin=10):
+    tile_corners = []
+    for c1 in corners:
+        if c1[0] <= tile_center[0] and c1[1] <= tile_center[1]:
+            # identify candidates for top left corner
+
+            candidates1 = get_90deg_corners(c1, corners,
+                                            lambda c: c[0] <= tile_center[0] and c[1] >= tile_center[1],
+                                            lambda c: c[0] >= tile_center[0] and c[1] <= tile_center[1], angle_margin)
+
+            for c2, c4 in candidates1:
+                for c3 in corners:
+                    if c3[0] >= tile_center[0] and c3[1] >= tile_center[1]:
+                        # identify candidates for bottom right corner
+                        candidates2 = get_90deg_corners(c3, corners,
+                                                        lambda c: True,
+                                                        # c[0] <= tile_center[0] and c[1] >= tile_center[1],
+                                                        lambda c: True,
+                                                        angle_margin)  # c[0] >= tile_center[0] and c[1] <= tile_center[1])
+                        for t2, t4 in candidates2:
+                            if (((np.array_equal(c2, t2) and np.array_equal(c4, t4)) or
+                                 (np.array_equal(c2, t4) and np.array_equal(c4, t2)))) and 90 - angle_margin < get_angle(c2,c3,c4) < 90 + angle_margin and 90 - angle_margin < get_angle(c3, c4, c1) < 90 + angle_margin:
+                                if len(tile_corners) > 0:
+                                    # check if better match
+                                    opt = np.array([90, 90, 90, 90])
+                                    ang_new = np.array(
+                                        [get_angle(c4, c1, c2), get_angle(c1, c2, c3), get_angle(c2, c3, c4),
+                                         get_angle(c3, c4, c1)])
+                                    ang_curr = np.array([get_angle(tile_corners[3], tile_corners[0], tile_corners[1]),
+                                                         get_angle(tile_corners[0], tile_corners[1], tile_corners[2]),
+                                                         get_angle(tile_corners[1], tile_corners[2], tile_corners[3]),
+                                                         get_angle(tile_corners[2], tile_corners[3], tile_corners[0])])
+                                    diff_new = np.sum(np.square(opt - ang_new))
+                                    diff_curr = np.sum(np.square(opt - ang_curr))
+                                    if diff_new > diff_curr:
+                                        continue
+                                tile_corners = [c1, c2, c3, c4]
+    return tile_corners
