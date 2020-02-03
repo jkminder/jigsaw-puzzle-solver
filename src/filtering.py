@@ -9,12 +9,9 @@ def filter(img):
     print("WARING: Green Screen Image is expected. Code cannot handle other types yet.")
     RED, GREEN, BLUE = (2, 1, 0)
 
-    empty_img = np.zeros_like(img)
-
     reds = img[:, :, RED]
     greens = img[:, :, GREEN]
     blues = img[:, :, BLUE]
 
     mask = (greens < 35) | (reds > greens) | (blues > greens)
-    empty_img[(greens < 35) | ((reds <= greens) & (blues <= greens))][BLUE] = 255
     return mask

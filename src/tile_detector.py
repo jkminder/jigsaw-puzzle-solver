@@ -111,6 +111,8 @@ def get_angle(p1,p2,p3):
     angle = np.arccos(cosine_angle)
     return np.degrees(angle)
 
+def get_distance(pt1,pt2):
+    return ((pt2[0]-pt1[0]) ** 2 + (pt2[1]-pt1[1]) ** 2) ** (1/2)
 
 def get_90deg_corners(pt, corners, rule1, rule2, margin = 5):
     """calculate all corners that are 90 degrees from pt, where the corners c1, c2 must comply with rule1, rule2 """
@@ -130,8 +132,28 @@ def get_90deg_corners(pt, corners, rule1, rule2, margin = 5):
     return res
 
 
-def get_tile_corners(corners, tile_center, angle_margin=10):
+def get_tile_corners(mask, crop, harris_blocksize=20, angle_margin=10, side_len_var_thres = 1000, angle_diff_ls_thres=100, rec_level=10):
+    """
+    returns points of tile corners
+    :param mask: tile mask
+    :param crop: croped image (for debugging)
+    :param harris_blocksize: initial block size for harris algorithm (will be increased upto rec_level*2 if no corners are found)
+    :param angle_margin: 90 +- angle_margin degrees are allowed
+    :param side_len_var_thres: corners are accepted if the side lenght variance is under this number
+    :param angle_diff_ls_thres: corners are accepted if the least squares angle diff to 90 is under this
+    :param rec_level: how many time the harris blocksize should be increased by 2
+    :return: array of 4 points
+    """
+    corners = get_corners(mask, harris_blocksize)
+    tile_center = ndimage.center_of_mass(mask)
+    tile_center = tuple(np.round(tile_center).astype(np.int))
+    ang_opt = np.array([90, 90, 90, 90])
+    ang_diff_ls = None
+    side_var = None
     tile_corners = []
+    for c in corners:
+        crop = cv2.circle(crop, tuple(c), 4, (255,0,0), thickness=3)
+
     for c1 in corners:
         if c1[0] <= tile_center[0] and c1[1] <= tile_center[1]:
             # identify candidates for top left corner
@@ -152,19 +174,27 @@ def get_tile_corners(corners, tile_center, angle_margin=10):
                         for t2, t4 in candidates2:
                             if (((np.array_equal(c2, t2) and np.array_equal(c4, t4)) or
                                  (np.array_equal(c2, t4) and np.array_equal(c4, t2)))) and 90 - angle_margin < get_angle(c2,c3,c4) < 90 + angle_margin and 90 - angle_margin < get_angle(c3, c4, c1) < 90 + angle_margin:
+                                new = [c1, c2, c3, c4]
+                                ang_new = np.array([get_angle(new[i], new[(i + 1) % 4], new[(i + 2) % 4]) for i in range(4)])
+                                ang_diff_ls_new = np.sum(np.square(ang_opt - ang_new))
+                                side_var_new = np.var([get_distance(new[(i + 1) % 4], new[i]) for i in range(4)])
                                 if len(tile_corners) > 0:
                                     # check if better match
-                                    opt = np.array([90, 90, 90, 90])
-                                    ang_new = np.array(
-                                        [get_angle(c4, c1, c2), get_angle(c1, c2, c3), get_angle(c2, c3, c4),
-                                         get_angle(c3, c4, c1)])
-                                    ang_curr = np.array([get_angle(tile_corners[3], tile_corners[0], tile_corners[1]),
-                                                         get_angle(tile_corners[0], tile_corners[1], tile_corners[2]),
-                                                         get_angle(tile_corners[1], tile_corners[2], tile_corners[3]),
-                                                         get_angle(tile_corners[2], tile_corners[3], tile_corners[0])])
-                                    diff_new = np.sum(np.square(opt - ang_new))
-                                    diff_curr = np.sum(np.square(opt - ang_curr))
-                                    if diff_new > diff_curr:
+                                    # by comparing least squares residual of angles to insure rectangle
+                                    # and of variance of distance to center to insure a centered rectangle
+                                    # and of variance of the side lengths to insure square
+
+                                    dist_var_new = np.var([get_distance(x, tile_center) for x in new])
+                                    dist_var_curr = np.var([get_distance(tile_corners[i], tile_center) for i in range(4)])
+                                    if ang_diff_ls_new > ang_diff_ls or dist_var_new > dist_var_curr or side_var_new > side_var:
                                         continue
+                                elif ang_diff_ls_new > angle_diff_ls_thres or side_var_new > side_len_var_thres:
+                                    continue
+                                ang_diff_ls = ang_diff_ls_new
+                                side_var = side_var_new
                                 tile_corners = [c1, c2, c3, c4]
-    return tile_corners
+    if len(tile_corners) == 0:
+        if rec_level <= 0:
+            raise RuntimeError(f"Could not detect tile corners! (with max harris blocksize {harris_blocksize})")
+        return get_tile_corners(mask, crop, harris_blocksize+2, angle_margin, side_len_var_thres, angle_diff_ls_thres, rec_level-1)
+    return tile_corners, crop
