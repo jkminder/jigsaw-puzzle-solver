@@ -7,7 +7,7 @@ import scipy.ndimage.filters as filters
 import scipy.ndimage as ndimage
 from src.filtering import filter
 from src.util import *
-from src.tile_detector import detect_tiles, get_corners, get_tile_corners
+from src.tile_detector import detect_tiles, get_tile_corners
 chien_fn = "chien_rouge_20_1.jpg"
 gogh_fn = "van-gogh.png"
 craies_fn = "craies_32.png"

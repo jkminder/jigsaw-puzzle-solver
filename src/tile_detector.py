@@ -197,4 +197,23 @@ def get_tile_corners(mask, crop, harris_blocksize=20, angle_margin=10, side_len_
         if rec_level <= 0:
             raise RuntimeError(f"Could not detect tile corners! (with max harris blocksize {harris_blocksize})")
         return get_tile_corners(mask, crop, harris_blocksize+2, angle_margin, side_len_var_thres, angle_diff_ls_thres, rec_level-1)
-    return tile_corners, crop
+    return improve_tile_corners(tile_corners, tile_center, mask), crop
+
+
+def improve_tile_corners(tile_corners, tile_center, mask):
+    """Improves corners by finding the furthest TRUE point in the mask from the corner in direction center->corner"""
+    imp_tile_corners = []
+    for c in tile_corners:
+        v = get_vector(tile_center, c)
+        v = v/v[0] #scale vector to y=1
+        if c[0]>tile_center[0]:
+            f = lambda x: (c + (v * x)).astype(int)
+        else:
+            f = lambda x: (c - (v * x)).astype(int)
+        d = 0
+        pt = f(d+1)
+        while mask[pt[1],pt[0]]:
+            d += 1
+            pt = f(d+1)
+        imp_tile_corners.append(f(d))
+    return imp_tile_corners
