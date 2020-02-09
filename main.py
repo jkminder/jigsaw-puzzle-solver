@@ -7,7 +7,8 @@ import scipy.ndimage.filters as filters
 import scipy.ndimage as ndimage
 from src.filtering import filter
 from src.util import *
-from src.tile_detector import detect_tiles, get_tile_corners
+from src.tile_detector import detect_tiles, get_tile_corners, get_angle
+from src.image_transformer import four_point_transform
 chien_fn = "chien_rouge_20_1.jpg"
 gogh_fn = "van-gogh.png"
 craies_fn = "craies_32.png"
@@ -48,7 +49,6 @@ for tile_id in range(len(boxes)):
 
     #detect the tile edges
     tile_corners, crop = get_tile_corners(mask,crop)
-
     if len(tile_corners) >= 3:
         crop = cv2.line(crop, tuple(tile_corners[0]), tuple(tile_corners[3]), red, 4)
         crop = cv2.line(crop, tuple(tile_corners[1]), tuple(tile_corners[0]), red, 4)
@@ -57,12 +57,13 @@ for tile_id in range(len(boxes)):
     for c in tile_corners:
         crop = cv2.circle(crop, tuple(c), 8, green, thickness=3)
 
-
+    #correct perspective
+    warped = four_point_transform(crop, np.array(tile_corners), 100)
 
     plt.subplot(121),plt.imshow(crop ,cmap = 'gray')
-    plt.title('Original Image'), plt.xticks([]), plt.yticks([])
-    plt.subplot(122),plt.imshow(mask,cmap = 'gray')
-    plt.title('Tile mask'), plt.xticks([]), plt.yticks([])
+    plt.title('original tile with corners'), plt.xticks([]), plt.yticks([])
+    plt.subplot(122),plt.imshow(warped,cmap = 'gray')
+    plt.title('perspective correction'), plt.xticks([]), plt.yticks([])
 
     plt.show()
     input("Press enter for next tile")
