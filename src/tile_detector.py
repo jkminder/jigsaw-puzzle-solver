@@ -132,7 +132,7 @@ def get_90deg_corners(pt, corners, rule1, rule2, margin = 5):
     return res
 
 
-def get_tile_corners(mask, crop, harris_blocksize=20, angle_margin=10, side_len_var_thres = 1000, angle_diff_ls_thres=100, rec_level=10):
+def get_tile_corners(mask, harris_blocksize=20, angle_margin=10, side_len_var_thres = 1000, angle_diff_ls_thres=100, rec_level=10):
     """
     returns points of tile corners
     :param mask: tile mask
@@ -151,8 +151,6 @@ def get_tile_corners(mask, crop, harris_blocksize=20, angle_margin=10, side_len_
     ang_diff_ls = None
     side_var = None
     tile_corners = []
-    for c in corners:
-        crop = cv2.circle(crop, tuple(c), 4, (255,0,0), thickness=3)
 
     for c1 in corners:
         if c1[0] <= tile_center[0] and c1[1] <= tile_center[1]:
@@ -196,8 +194,8 @@ def get_tile_corners(mask, crop, harris_blocksize=20, angle_margin=10, side_len_
     if len(tile_corners) == 0:
         if rec_level <= 0:
             raise RuntimeError(f"Could not detect tile corners! (with max harris blocksize {harris_blocksize})")
-        return get_tile_corners(mask, crop, harris_blocksize+2, angle_margin, side_len_var_thres, angle_diff_ls_thres, rec_level-1)
-    return improve_tile_corners(tile_corners, tile_center, mask), crop
+        return get_tile_corners(mask, harris_blocksize+2, angle_margin, side_len_var_thres, angle_diff_ls_thres, rec_level-1)
+    return improve_tile_corners(tile_corners, tile_center, mask)
 
 
 def improve_tile_corners(tile_corners, tile_center, mask):

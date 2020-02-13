@@ -24,13 +24,14 @@ def order_points(pts):
     return rect
 
 
-def four_point_transform(image, pts, padding):
+def four_point_transform(image, pts):
     ### modified code from https://www.pyimagesearch.com/2014/08/25/4-point-opencv-getperspective-transform-example/
 
     # obtain a consistent order of the points and unpack them
     # individually
     rect = order_points(pts)
     (tl, tr, br, bl) = rect
+    padding = int(max(tl))
     # compute the width of the new image, which will be the
     # maximum distance between bottom-right and bottom-left
     # x-coordiates or the top-right and top-left x-coordinates
@@ -48,15 +49,16 @@ def four_point_transform(image, pts, padding):
     # (i.e. top-down view) of the image, again specifying points
     # in the top-left, top-right, bottom-right, and bottom-left
     # order
+    #maxHeight = 401
+    #maxWidth = 401
     dst = np.array([
         [padding, padding],
         [maxWidth - 1, padding],
         [maxWidth - 1, maxHeight - 1],
         [padding, maxHeight - 1]], dtype="float32")
 
-
     # compute the perspective transform matrix and then apply it
     M = cv2.getPerspectiveTransform(rect, dst)
     warped = cv2.warpPerspective(image, M, (maxWidth + padding, maxHeight + padding))
     # return the warped image
-    return warped
+    return warped, dst.astype(int)
